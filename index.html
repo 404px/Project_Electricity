@@ -1,0 +1,2055 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#07080C" />
+  <title>오프라인 타종 & 멀티 알람 시계</title>
+
+  <style>
+    :root {
+      --bg-main: #07080C;
+      --bg-panel: #10131C;
+      --bg-card: rgba(255, 255, 255, 0.05);
+      --bg-card-hover: rgba(255, 255, 255, 0.09);
+      --border-subtle: rgba(255, 255, 255, 0.1);
+
+      --text-primary: #F9FAFB;
+      --text-secondary: rgba(255, 255, 255, 0.7);
+      --text-muted: rgba(255, 255, 255, 0.42);
+
+      --led-red-on: #FF1E1E;
+      --led-red-core: #FF5252;
+      --led-red-off: rgba(255, 30, 30, 0.075);
+      --led-glow: rgba(255, 24, 24, 0.75);
+
+      --toss-blue: #3182F6;
+      --toss-blue-hover: #1B64DA;
+      --emerald-green: #10B981;
+      --amber-warn: #F59E0B;
+      --danger-red: #EF4444;
+
+      --drawer-bg: rgba(14, 17, 26, 0.97);
+      --font-sans: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", "맑은 고딕", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: var(--font-sans);
+      color: var(--text-primary);
+      background-color: var(--bg-main);
+      background-image: radial-gradient(circle at 50% 38%, rgba(255, 30, 30, 0.07) 0%, rgba(7, 8, 12, 0) 68%);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .activation-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(5, 6, 10, 0.94);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: opacity 0.45s ease, visibility 0.45s ease;
+    }
+
+    .activation-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .activation-pulse-ring {
+      width: 92px;
+      height: 92px;
+      border-radius: 50%;
+      background: rgba(255, 30, 30, 0.14);
+      border: 1.5px solid rgba(255, 50, 50, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 24px;
+      animation: pulseRedGlow 2.2s infinite ease-in-out;
+    }
+
+    @keyframes pulseRedGlow {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(255, 30, 30, 0.45);
+      }
+      50% {
+        transform: scale(1.06);
+        box-shadow: 0 0 0 22px rgba(255, 30, 30, 0);
+      }
+    }
+
+    .activation-title {
+      font-size: clamp(1.45rem, 4vw, 2.1rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+      color: #FFFFFF;
+    }
+
+    .activation-subtitle {
+      font-size: clamp(0.92rem, 2.2vw, 1.05rem);
+      color: var(--text-secondary);
+      line-height: 1.6;
+      max-width: 440px;
+      margin-bottom: 26px;
+    }
+
+    .activation-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 999px;
+      background: rgba(255, 30, 30, 0.16);
+      border: 1px solid rgba(255, 80, 80, 0.4);
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: #FCA5A5;
+    }
+
+    .app-container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: clamp(14px, 3vw, 28px);
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      z-index: 10;
+    }
+
+    .status-pills {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+    }
+
+    .pill.clickable {
+      cursor: pointer;
+    }
+
+    .pill.clickable:hover {
+      background: var(--bg-card-hover);
+      color: #FFFFFF;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .dot.active-green {
+      background: #34D399;
+      box-shadow: 0 0 8px rgba(52, 211, 153, 0.8);
+    }
+
+    .dot.warn-amber {
+      background: var(--amber-warn);
+      box-shadow: 0 0 8px rgba(245, 158, 11, 0.8);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .action-btn {
+      height: 44px;
+      padding: 0 16px;
+      border-radius: 14px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      font-size: 0.88rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .action-btn:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .action-btn.primary {
+      background: var(--toss-blue);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .action-btn.primary:hover {
+      background: var(--toss-blue-hover);
+    }
+
+    .center-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 10px 0;
+    }
+
+    .clock-bezel {
+      width: min(96vw, 960px);
+      background: linear-gradient(180deg, #0B0D13 0%, #050609 100%);
+      border: 1.5px solid rgba(255, 255, 255, 0.09);
+      border-radius: clamp(22px, 4vw, 38px);
+      padding: clamp(20px, 4.5vw, 48px) clamp(16px, 4vw, 44px);
+      box-shadow:
+        0 26px 60px rgba(0, 0, 0, 0.75),
+        inset 0 2px 12px rgba(255, 255, 255, 0.03),
+        0 0 80px rgba(255, 20, 20, 0.06);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .clock-top-meta {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: clamp(12px, 2.5vh, 24px);
+      padding: 0 6px;
+      font-size: clamp(0.8rem, 1.8vw, 0.96rem);
+      color: var(--text-muted);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+    }
+
+    .day-indicator-row {
+      display: flex;
+      gap: clamp(6px, 1.5vw, 14px);
+    }
+
+    .day-led-label {
+      padding: 3px 7px;
+      border-radius: 6px;
+      font-size: clamp(0.75rem, 1.6vw, 0.88rem);
+      color: rgba(255, 255, 255, 0.22);
+      transition: all 0.3s ease;
+    }
+
+    .day-led-label.today {
+      color: #FF4D4D;
+      background: rgba(255, 30, 30, 0.14);
+      text-shadow: 0 0 10px rgba(255, 30, 30, 0.8);
+      border: 1px solid rgba(255, 60, 60, 0.35);
+    }
+
+    .segment-clock-wrapper {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(6px, 1.8vw, 20px);
+      padding: 6px 0;
+    }
+
+    .digit-svg {
+      width: clamp(58px, 18.5vw, 175px);
+      height: auto;
+      aspect-ratio: 110 / 190;
+      overflow: visible;
+    }
+
+    .colon-svg {
+      width: clamp(18px, 5vw, 44px);
+      height: auto;
+      aspect-ratio: 40 / 190;
+      overflow: visible;
+    }
+
+    /* 8-Segment Polygons (7 segments A~G + 8th segment DP) */
+    .seg {
+      fill: var(--led-red-off);
+      transition: fill 0.09s ease, filter 0.09s ease;
+    }
+
+    .seg.on {
+      fill: var(--led-red-on);
+      filter: drop-shadow(0 0 8px var(--led-glow)) drop-shadow(0 0 18px rgba(255, 0, 0, 0.45));
+    }
+
+    .colon-dot {
+      fill: var(--led-red-off);
+      transition: fill 0.12s ease, filter 0.12s ease;
+    }
+
+    .colon-dot.on {
+      fill: var(--led-red-on);
+      filter: drop-shadow(0 0 8px var(--led-glow)) drop-shadow(0 0 16px rgba(255, 0, 0, 0.5));
+    }
+
+    .clock-bottom-meta {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: clamp(14px, 2.5vh, 26px);
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .next-alarm-box {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: clamp(0.86rem, 2vw, 1.02rem);
+      color: var(--text-secondary);
+      font-weight: 600;
+    }
+
+    .next-alarm-highlight {
+      color: #FCA5A5;
+      font-weight: 700;
+    }
+
+    .seconds-mini-badge {
+      font-variant-numeric: tabular-nums;
+      font-family: monospace;
+      font-size: clamp(0.9rem, 2vw, 1.1rem);
+      font-weight: 800;
+      color: #FF5252;
+      background: rgba(255, 30, 30, 0.12);
+      border: 1px solid rgba(255, 60, 60, 0.28);
+      padding: 4px 12px;
+      border-radius: 8px;
+      letter-spacing: 0.06em;
+    }
+
+    .bottom-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      width: 100%;
+      padding-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.86rem;
+      color: var(--text-secondary);
+    }
+
+    .quick-alarm-chips {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      overflow-x: auto;
+      max-width: 100%;
+      padding-bottom: 2px;
+    }
+
+    .alarm-mini-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .alarm-mini-chip.active {
+      border-color: rgba(255, 70, 70, 0.45);
+      color: #FECACA;
+      background: rgba(255, 30, 30, 0.1);
+    }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .drawer-backdrop.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .settings-drawer {
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      width: min(100%, 480px);
+      z-index: 1001;
+      background: var(--drawer-bg);
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: -20px 0 50px rgba(0, 0, 0, 0.65);
+    }
+
+    .settings-drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 22px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .drawer-title {
+      font-size: 1.18rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .drawer-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 12px 22px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .tab-btn {
+      padding: 11px 14px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      background: var(--toss-blue);
+      color: #FFFFFF;
+      box-shadow: 0 4px 14px rgba(49, 130, 246, 0.35);
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 18px 22px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .tab-panel {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .tab-panel.active {
+      display: flex;
+    }
+
+    .setting-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 18px;
+      padding: 16px;
+    }
+
+    .section-label {
+      font-size: 0.76rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #93C5FD;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #FFFFFF;
+    }
+
+    .section-desc {
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .form-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+    }
+
+    .time-picker-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .time-select, .form-input, .form-select {
+      width: 100%;
+      height: 44px;
+      padding: 0 12px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #FFFFFF;
+      font-size: 0.95rem;
+      font-weight: 700;
+      outline: none;
+    }
+
+    .time-select {
+      font-size: 1.15rem;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .time-select:focus, .form-input:focus, .form-select:focus {
+      border-color: var(--toss-blue);
+    }
+
+    .days-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+
+    .day-checkbox-label {
+      position: relative;
+      cursor: pointer;
+    }
+
+    .day-checkbox-input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .day-chip {
+      height: 40px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.86rem;
+      font-weight: 700;
+      color: var(--text-secondary);
+      transition: all 0.18s ease;
+    }
+
+    .day-checkbox-input:checked + .day-chip {
+      background: var(--toss-blue);
+      border-color: #60A5FA;
+      color: #FFFFFF;
+    }
+
+    .primary-btn {
+      width: 100%;
+      padding: 13px 16px;
+      border-radius: 13px;
+      background: var(--toss-blue);
+      color: #FFFFFF;
+      font-size: 0.94rem;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s ease;
+    }
+
+    .primary-btn:hover {
+      background: var(--toss-blue-hover);
+    }
+
+    .secondary-btn {
+      padding: 9px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #FFFFFF;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .secondary-btn:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .danger-btn {
+      padding: 7px 11px;
+      border-radius: 9px;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #FCA5A5;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .alarm-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .alarm-item {
+      background: rgba(255, 255, 255, 0.045);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: opacity 0.2s ease, border-color 0.2s ease;
+    }
+
+    .alarm-item.disabled {
+      opacity: 0.48;
+    }
+
+    .alarm-item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .alarm-time-badge {
+      font-size: 1.65rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: #FF5252;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .alarm-label-text {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #FFFFFF;
+      margin-left: 8px;
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: rgba(255, 255, 255, 0.18);
+      transition: 0.25s;
+      border-radius: 999px;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.25s;
+      border-radius: 50%;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background-color: var(--toss-blue);
+    }
+
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(20px);
+    }
+
+    .alarm-item-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .alarm-sound-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 9px;
+      border-radius: 8px;
+      background: rgba(49, 130, 246, 0.15);
+      border: 1px solid rgba(49, 130, 246, 0.35);
+      color: #BFDBFE;
+      font-size: 0.76rem;
+      font-weight: 600;
+    }
+
+    .track-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .track-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.32);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+
+    .track-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #E2E8F0;
+      word-break: break-all;
+      flex: 1;
+    }
+
+    .track-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .bell-playing-indicator {
+      position: fixed;
+      top: 78px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(220, 38, 38, 0.96);
+      border: 1px solid rgba(255, 150, 150, 0.5);
+      color: #FFFFFF;
+      padding: 11px 22px;
+      border-radius: 999px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      z-index: 1500;
+      box-shadow: 0 10px 30px rgba(220, 38, 38, 0.6);
+    }
+
+    .bell-playing-indicator.active {
+      display: inline-flex;
+    }
+
+    .toast-banner {
+      position: fixed;
+      bottom: 26px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #FFFFFF;
+      padding: 12px 20px;
+      border-radius: 999px;
+      font-size: 0.86rem;
+      font-weight: 600;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.28s ease;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      white-space: nowrap;
+    }
+
+    .toast-banner.show {
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .hidden-file-input {
+      display: none;
+    }
+
+    @media (max-width: 540px) {
+      .clock-top-meta {
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+      }
+      .clock-bottom-meta {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="activationOverlay" class="activation-overlay" role="button" tabindex="0">
+    <div class="activation-pulse-ring">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FF5252" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+      </svg>
+    </div>
+    <h1 class="activation-title">화면을 터치하면 디지털 시계와 알람이 가동됩니다</h1>
+    <p class="activation-subtitle">
+      공폰 화면 꺼짐 방지(Wake Lock)와 오프라인 멀티 음원 자동 재생 엔진을 깨웁니다.<br />
+      가동 후에는 설정해 둔 요일·시간(HH:MM)마다 지정한 음악이 자동 재생됩니다.
+    </p>
+    <div class="activation-badge">
+      <span>🔴 터치하여 8세그먼트 시계 & 타종 시스템 시작</span>
+    </div>
+  </div>
+
+  <!-- 알림/음악 재생 중 표시 배너 -->
+  <div id="bellPlayingBanner" class="bell-playing-indicator">
+    <span id="bellPlayingText">🔔 알림 음악 재생 중...</span>
+    <button id="stopBellQuickBtn" class="secondary-btn" style="background: rgba(0,0,0,0.3); border:none; padding: 5px 12px;">소리 끄기</button>
+  </div>
+
+  <main class="app-container">
+    <header class="top-bar">
+      <div class="status-pills">
+        <div id="wakeLockPill" class="pill">
+          <span id="wakeLockDot" class="dot"></span>
+          <span id="wakeLockText">화면 유지 대기 중</span>
+        </div>
+
+        <div id="audioCountPill" class="pill clickable" title="클릭하여 음악 보관함 열기">
+          <span id="audioCountDot" class="dot active-green"></span>
+          <span id="audioCountText">보관함 음악: 기본음 3종</span>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <button id="openMusicTabBtn" class="action-btn" title="여러 음악 파일 넣기">
+          <span>🎵 음악 넣기</span>
+        </button>
+        <button id="openAlarmTabBtn" class="action-btn primary" title="알림 시간·요일·음악 설정">
+          <span>⏰ 알림 설정</span>
+        </button>
+      </div>
+    </header>
+
+    <section class="center-stage">
+      <div class="clock-bezel" aria-label="현재 시각 8세그먼트 디지털 시계">
+        <div class="clock-top-meta">
+          <span id="dateFullText">2026. 01. 01</span>
+          <div class="day-indicator-row" id="clockDayRow">
+            <span class="day-led-label" data-day="1">MON</span>
+            <span class="day-led-label" data-day="2">TUE</span>
+            <span class="day-led-label" data-day="3">WED</span>
+            <span class="day-led-label" data-day="4">THU</span>
+            <span class="day-led-label" data-day="5">FRI</span>
+            <span class="day-led-label" data-day="6">SAT</span>
+            <span class="day-led-label" data-day="0">SUN</span>
+          </div>
+        </div>
+
+        <!-- 8세그먼트(7세그먼트 A~G + 8번째 DP 도트) 4자리 HH:MM 표시부 -->
+        <div class="segment-clock-wrapper" id="segmentClockWrapper">
+          <!-- Digit 0 (Hour Tens) -->
+          <svg class="digit-svg" viewBox="0 0 110 190" data-digit-index="0">
+            <g transform="skewX(-5) translate(8, 0)">
+              <polygon class="seg seg-a" points="22,12 78,12 86,20 76,28 24,28 14,20" />
+              <polygon class="seg seg-b" points="88,22 96,30 92,82 82,90 74,82 78,30" />
+              <polygon class="seg seg-c" points="82,98 90,106 86,158 76,166 68,158 72,106" />
+              <polygon class="seg seg-d" points="18,160 70,160 78,168 68,176 16,176 10,168" />
+              <polygon class="seg seg-e" points="12,98 20,106 16,158 8,166 0,158 4,106" />
+              <polygon class="seg seg-f" points="16,22 26,30 22,82 12,90 4,82 8,30" />
+              <polygon class="seg seg-g" points="22,86 72,86 80,94 72,102 20,102 12,94" />
+              <circle class="seg seg-dp" cx="95" cy="168" r="7" />
+            </g>
+          </svg>
+
+          <!-- Digit 1 (Hour Ones) -->
+          <svg class="digit-svg" viewBox="0 0 110 190" data-digit-index="1">
+            <g transform="skewX(-5) translate(8, 0)">
+              <polygon class="seg seg-a" points="22,12 78,12 86,20 76,28 24,28 14,20" />
+              <polygon class="seg seg-b" points="88,22 96,30 92,82 82,90 74,82 78,30" />
+              <polygon class="seg seg-c" points="82,98 90,106 86,158 76,166 68,158 72,106" />
+              <polygon class="seg seg-d" points="18,160 70,160 78,168 68,176 16,176 10,168" />
+              <polygon class="seg seg-e" points="12,98 20,106 16,158 8,166 0,158 4,106" />
+              <polygon class="seg seg-f" points="16,22 26,30 22,82 12,90 4,82 8,30" />
+              <polygon class="seg seg-g" points="22,86 72,86 80,94 72,102 20,102 12,94" />
+              <circle class="seg seg-dp" cx="95" cy="168" r="7" />
+            </g>
+          </svg>
+
+          <!-- Blinking Colon (:) -->
+          <svg class="colon-svg" viewBox="0 0 40 190">
+            <circle id="colonTop" class="colon-dot on" cx="22" cy="64" r="9" />
+            <circle id="colonBottom" class="colon-dot on" cx="18" cy="126" r="9" />
+          </svg>
+
+          <!-- Digit 2 (Minute Tens) -->
+          <svg class="digit-svg" viewBox="0 0 110 190" data-digit-index="2">
+            <g transform="skewX(-5) translate(8, 0)">
+              <polygon class="seg seg-a" points="22,12 78,12 86,20 76,28 24,28 14,20" />
+              <polygon class="seg seg-b" points="88,22 96,30 92,82 82,90 74,82 78,30" />
+              <polygon class="seg seg-c" points="82,98 90,106 86,158 76,166 68,158 72,106" />
+              <polygon class="seg seg-d" points="18,160 70,160 78,168 68,176 16,176 10,168" />
+              <polygon class="seg seg-e" points="12,98 20,106 16,158 8,166 0,158 4,106" />
+              <polygon class="seg seg-f" points="16,22 26,30 22,82 12,90 4,82 8,30" />
+              <polygon class="seg seg-g" points="22,86 72,86 80,94 72,102 20,102 12,94" />
+              <circle class="seg seg-dp" cx="95" cy="168" r="7" />
+            </g>
+          </svg>
+
+          <!-- Digit 3 (Minute Ones) -->
+          <svg class="digit-svg" viewBox="0 0 110 190" data-digit-index="3">
+            <g transform="skewX(-5) translate(8, 0)">
+              <polygon class="seg seg-a" points="22,12 78,12 86,20 76,28 24,28 14,20" />
+              <polygon class="seg seg-b" points="88,22 96,30 92,82 82,90 74,82 78,30" />
+              <polygon class="seg seg-c" points="82,98 90,106 86,158 76,166 68,158 72,106" />
+              <polygon class="seg seg-d" points="18,160 70,160 78,168 68,176 16,176 10,168" />
+              <polygon class="seg seg-e" points="12,98 20,106 16,158 8,166 0,158 4,106" />
+              <polygon class="seg seg-f" points="16,22 26,30 22,82 12,90 4,82 8,30" />
+              <polygon class="seg seg-g" points="22,86 72,86 80,94 72,102 20,102 12,94" />
+              <circle class="seg seg-dp" cx="95" cy="168" r="7" />
+            </g>
+          </svg>
+        </div>
+
+        <div class="clock-bottom-meta">
+          <div class="next-alarm-box">
+            <span>🔔 다음 울릴 알림:</span>
+            <span id="nextAlarmSummary" class="next-alarm-highlight">예정된 알림 확인 중...</span>
+          </div>
+          <div id="secondsBadge" class="seconds-mini-badge">00 SEC</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="bottom-bar">
+      <div class="quick-alarm-chips" id="todayAlarmsPreview"></div>
+      <div style="display:flex; gap:8px;">
+        <button id="testCurrentSoundBtn" class="secondary-btn">🔔 소리 테스트</button>
+      </div>
+    </footer>
+  </main>
+
+  <div id="drawerBackdrop" class="drawer-backdrop"></div>
+
+  <aside id="settingsDrawer" class="settings-drawer" aria-label="알림 및 음악 설정창">
+    <div class="drawer-header">
+      <h2 class="drawer-title">알림(타종) & 음악 설정</h2>
+      <button id="closeSettingsBtn" class="secondary-btn" style="padding: 8px 12px; border-radius: 10px;">닫기 ✕</button>
+    </div>
+
+    <div class="drawer-tabs">
+      <button id="tabBtnAlarms" class="tab-btn active" type="button">⏰ 알림 스케줄 관리</button>
+      <button id="tabBtnMusic" class="tab-btn" type="button">🎵 내 음악 보관함 (<span id="tabMusicCount">0</span>)</button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- 탭 1: 알림 스케줄 추가 및 목록 -->
+      <div id="tabPanelAlarms" class="tab-panel active">
+        <div class="setting-card">
+          <span class="section-label">새 알림 추가</span>
+          <div class="section-title">시간 · 요일 · 울릴 음악 지정</div>
+
+          <div class="form-row">
+            <label class="form-label">울릴 시각 (24시간 HH : MM)</label>
+            <div class="time-picker-group">
+              <select id="newAlarmHour" class="time-select" aria-label="시 선택"></select>
+              <span style="font-size:1.3rem; font-weight:800;">:</span>
+              <select id="newAlarmMinute" class="time-select" aria-label="분 선택"></select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label">울릴 요일 선택 (복수 선택 가능)</label>
+            <div class="days-grid" id="newAlarmDaysGrid">
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="1" /><span class="day-chip">월</span></label>
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="2" /><span class="day-chip">화</span></label>
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="3" /><span class="day-chip">수</span></label>
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="4" /><span class="day-chip">목</span></label>
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="5" checked /><span class="day-chip">금</span></label>
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="6" checked /><span class="day-chip">토</span></label>
+              <label class="day-checkbox-label"><input type="checkbox" class="day-checkbox-input" value="0" checked /><span class="day-chip">일</span></label>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label" for="newAlarmSoundSelect">울릴 음악 종류 선택</label>
+            <div style="display:flex; gap:8px;">
+              <select id="newAlarmSoundSelect" class="form-select"></select>
+              <button id="previewSelectedSoundBtn" type="button" class="secondary-btn" style="flex-shrink:0;">▶ 미리듣기</button>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="form-label" for="newAlarmLabel">알림 이름 (메모)</label>
+            <input id="newAlarmLabel" type="text" class="form-input" placeholder="예: 1교시 입실 종, 쉬는 시간, 점심시간" value="수업/공부 타종" />
+          </div>
+
+          <button id="addAlarmBtn" type="button" class="primary-btn">
+            <span>＋ 이 알림 추가하기</span>
+          </button>
+        </div>
+
+        <!-- 등록된 알림 리스트 -->
+        <div class="setting-card">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <div>
+              <span class="section-label" style="margin-bottom:2px;">등록된 알림 목록</span>
+              <div class="section-title" style="margin-bottom:0;">내 알림 스케줄 (<span id="alarmTotalCount">0</span>개)</div>
+            </div>
+            <button id="presetSchoolScheduleBtn" type="button" class="secondary-btn" title="주말 50분 공부 / 10분 휴식 정규 시간표를 한 번에 추가합니다">
+              ⚡ 50분/10분 시간표 자동생성
+            </button>
+          </div>
+
+          <div id="alarmListContainer" class="alarm-list"></div>
+        </div>
+      </div>
+
+      <!-- 탭 2: 내 음악(음원) 여러 개 등록 및 관리 -->
+      <div id="tabPanelMusic" class="tab-panel">
+        <div class="setting-card">
+          <span class="section-label">오프라인 멀티 음원 보관함</span>
+          <div class="section-title">여러 개의 음악/종소리 파일 넣기</div>
+          <p class="section-desc">
+            스마트폰에 있는 MP3, WAV, M4A 등 음악 파일을 <strong>한 번에 여러 개</strong> 선택해서 넣을 수 있습니다. 등록된 음악은 브라우저 내부 데이터베이스(IndexedDB)에 영구 저장되어 앱을 껐다 켜도 유지됩니다.
+          </p>
+
+          <label for="multiAudioFileInput" class="primary-btn" style="cursor:pointer;">
+            <span>📂 내 폰에서 음악 파일 여러 개 추가하기</span>
+          </label>
+          <input id="multiAudioFileInput" type="file" accept="audio/*" multiple class="hidden-file-input" />
+
+          <div id="userTrackListContainer" class="track-list"></div>
+        </div>
+
+        <div class="setting-card">
+          <span class="section-label">기본 내장 사운드 (인터넷 불필요)</span>
+          <div class="section-title">내장 학교 차임벨 & 알람음 3종</div>
+          <p class="section-desc">음악 파일을 넣기 전에도 언제든 선택해 사용할 수 있는 내장 음원입니다.</p>
+          <div class="track-list">
+            <div class="track-item">
+              <span class="track-name">🔔 [기본] 학교 웨스트민스터 차임벨</span>
+              <button type="button" class="secondary-btn builtin-preview-btn" data-sound="builtin:westminster">▶ 재생</button>
+            </div>
+            <div class="track-item">
+              <span class="track-name">✨ [기본] 맑은 3단 실로폰 종소리</span>
+              <button type="button" class="secondary-btn builtin-preview-btn" data-sound="builtin:chime">▶ 재생</button>
+            </div>
+            <div class="track-item">
+              <span class="track-name">⏰ [기본] 클래식 디지털 비프 알람</span>
+              <button type="button" class="secondary-btn builtin-preview-btn" data-sound="builtin:digital">▶ 재생</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="toastBanner" class="toast-banner" role="status" aria-live="polite">설정이 저장되었습니다</div>
+
+  <audio id="alarmAudioPlayer" preload="auto" style="display: none;"></audio>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const ALARMS_STORAGE_KEY = 'OFFLINE_MULTI_ALARM_LIST_V2';
+      const IDB_NAME = 'OfflineStudyBellAudioDB';
+      const IDB_STORE = 'audioTracks';
+      const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+      // 8세그먼트 숫자 매핑 (a, b, c, d, e, f, g 세그먼트 점등 규칙)
+      const DIGIT_SEGMENTS = {
+        '0': ['a', 'b', 'c', 'd', 'e', 'f'],
+        '1': ['b', 'c'],
+        '2': ['a', 'b', 'd', 'e', 'g'],
+        '3': ['a', 'b', 'c', 'd', 'g'],
+        '4': ['b', 'c', 'f', 'g'],
+        '5': ['a', 'c', 'd', 'f', 'g'],
+        '6': ['a', 'c', 'd', 'e', 'f', 'g'],
+        '7': ['a', 'b', 'c'],
+        '8': ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
+        '9': ['a', 'b', 'c', 'd', 'f', 'g']
+      };
+
+      const BUILTIN_SOUNDS = [
+        { id: 'builtin:westminster', name: '🔔 [기본] 학교 웨스트민스터 차임벨' },
+        { id: 'builtin:chime', name: '✨ [기본] 맑은 3단 실로폰 종소리' },
+        { id: 'builtin:digital', name: '⏰ [기본] 클래식 디지털 비프 알람' }
+      ];
+
+      // 초기 샘플 알림 (금, 토, 일 오전 9시 시작종 & 9시 50분 쉬는시간 종)
+      const DEFAULT_ALARMS = [
+        { id: 'alm_1', time: '09:00', days: [5, 6, 0], soundId: 'builtin:westminster', label: '1교시 공부 시작종', enabled: true },
+        { id: 'alm_2', time: '09:50', days: [5, 6, 0], soundId: 'builtin:chime', label: '1교시 종료 (10분 휴식)', enabled: true },
+        { id: 'alm_3', time: '10:00', days: [5, 6, 0], soundId: 'builtin:westminster', label: '2교시 공부 시작종', enabled: true },
+        { id: 'alm_4', time: '10:50', days: [5, 6, 0], soundId: 'builtin:chime', label: '2교시 종료 (10분 휴식)', enabled: true }
+      ];
+
+      let alarms = loadAlarmsFromStorage();
+      let customTracks = []; // { id, name, blob, objectUrl }
+      let state = {
+        isActivated: false,
+        lastTriggeredKey: '', // "YYYY-MM-DD_HH:MM" 중복 울림 방지
+        audioContext: null,
+        wakeLockSentinel: null,
+        synthStopTimer: null
+      };
+
+      const dom = {
+        activationOverlay: document.getElementById('activationOverlay'),
+        wakeLockDot: document.getElementById('wakeLockDot'),
+        wakeLockText: document.getElementById('wakeLockText'),
+        audioCountPill: document.getElementById('audioCountPill'),
+        audioCountText: document.getElementById('audioCountText'),
+        openMusicTabBtn: document.getElementById('openMusicTabBtn'),
+        openAlarmTabBtn: document.getElementById('openAlarmTabBtn'),
+        dateFullText: document.getElementById('dateFullText'),
+        clockDayRow: document.getElementById('clockDayRow'),
+        segmentClockWrapper: document.getElementById('segmentClockWrapper'),
+        colonTop: document.getElementById('colonTop'),
+        colonBottom: document.getElementById('colonBottom'),
+        nextAlarmSummary: document.getElementById('nextAlarmSummary'),
+        secondsBadge: document.getElementById('secondsBadge'),
+        todayAlarmsPreview: document.getElementById('todayAlarmsPreview'),
+        testCurrentSoundBtn: document.getElementById('testCurrentSoundBtn'),
+        drawerBackdrop: document.getElementById('drawerBackdrop'),
+        settingsDrawer: document.getElementById('settingsDrawer'),
+        closeSettingsBtn: document.getElementById('closeSettingsBtn'),
+        tabBtnAlarms: document.getElementById('tabBtnAlarms'),
+        tabBtnMusic: document.getElementById('tabBtnMusic'),
+        tabMusicCount: document.getElementById('tabMusicCount'),
+        tabPanelAlarms: document.getElementById('tabPanelAlarms'),
+        tabPanelMusic: document.getElementById('tabPanelMusic'),
+        newAlarmHour: document.getElementById('newAlarmHour'),
+        newAlarmMinute: document.getElementById('newAlarmMinute'),
+        newAlarmDaysGrid: document.getElementById('newAlarmDaysGrid'),
+        newAlarmSoundSelect: document.getElementById('newAlarmSoundSelect'),
+        previewSelectedSoundBtn: document.getElementById('previewSelectedSoundBtn'),
+        newAlarmLabel: document.getElementById('newAlarmLabel'),
+        addAlarmBtn: document.getElementById('addAlarmBtn'),
+        alarmTotalCount: document.getElementById('alarmTotalCount'),
+        presetSchoolScheduleBtn: document.getElementById('presetSchoolScheduleBtn'),
+        alarmListContainer: document.getElementById('alarmListContainer'),
+        multiAudioFileInput: document.getElementById('multiAudioFileInput'),
+        userTrackListContainer: document.getElementById('userTrackListContainer'),
+        bellPlayingBanner: document.getElementById('bellPlayingBanner'),
+        bellPlayingText: document.getElementById('bellPlayingText'),
+        stopBellQuickBtn: document.getElementById('stopBellQuickBtn'),
+        toastBanner: document.getElementById('toastBanner'),
+        alarmAudioPlayer: document.getElementById('alarmAudioPlayer')
+      };
+
+      function loadAlarmsFromStorage() {
+        try {
+          const raw = localStorage.getItem(ALARMS_STORAGE_KEY);
+          if (!raw) return [...DEFAULT_ALARMS];
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return [...DEFAULT_ALARMS];
+          return parsed;
+        } catch (e) {
+          return [...DEFAULT_ALARMS];
+        }
+      }
+
+      function saveAlarmsToStorage() {
+        try {
+          localStorage.setItem(ALARMS_STORAGE_KEY, JSON.stringify(alarms));
+        } catch (e) {}
+      }
+
+      function openAudioDB() {
+        return new Promise((resolve, reject) => {
+          if (!('indexedDB' in window)) {
+            reject(new Error('IndexedDB not supported'));
+            return;
+          }
+          const req = indexedDB.open(IDB_NAME, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) {
+              db.createObjectStore(IDB_STORE, { keyPath: 'id' });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+
+      async function loadTracksFromIndexedDB() {
+        try {
+          const db = await openAudioDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readonly');
+            const store = tx.objectStore(IDB_STORE);
+            const req = store.getAll();
+            req.onsuccess = () => {
+              const items = req.result || [];
+              customTracks.forEach(t => {
+                if (t.objectUrl) URL.revokeObjectURL(t.objectUrl);
+              });
+              customTracks = items.map(item => ({
+                id: item.id,
+                name: item.name,
+                blob: item.blob,
+                objectUrl: URL.createObjectURL(item.blob)
+              }));
+              resolve();
+            };
+            req.onerror = () => resolve();
+          });
+        } catch (e) {}
+      }
+
+      async function saveTrackToIndexedDB(trackObj) {
+        try {
+          const db = await openAudioDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).put({
+              id: trackObj.id,
+              name: trackObj.name,
+              blob: trackObj.blob
+            });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+          });
+        } catch (e) {}
+      }
+
+      async function deleteTrackFromIndexedDB(trackId) {
+        try {
+          const db = await openAudioDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).delete(trackId);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+          });
+        } catch (e) {}
+      }
+
+      async function handleMultiAudioUpload(event) {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+
+        for (const file of files) {
+          const id = 'track_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+          const objectUrl = URL.createObjectURL(file);
+          const trackObj = {
+            id: id,
+            name: file.name,
+            blob: file,
+            objectUrl: objectUrl
+          };
+          customTracks.push(trackObj);
+          await saveTrackToIndexedDB(trackObj);
+        }
+
+        event.target.value = '';
+        renderMusicLibraryUI();
+        renderSoundSelectOptions();
+        renderAlarmListUI();
+        showToast(`🎵 ${files.length}개의 음악 파일이 보관함에 추가되었습니다`);
+      }
+
+      async function removeCustomTrack(trackId) {
+        const idx = customTracks.findIndex(t => t.id === trackId);
+        if (idx !== -1) {
+          if (customTracks[idx].objectUrl) {
+            URL.revokeObjectURL(customTracks[idx].objectUrl);
+          }
+          customTracks.splice(idx, 1);
+        }
+        await deleteTrackFromIndexedDB(trackId);
+
+        // 해당 음원을 쓰던 알림은 기본 차임벨로 안전하게 변경
+        alarms.forEach(alm => {
+          if (alm.soundId === trackId) {
+            alm.soundId = 'builtin:westminster';
+          }
+        });
+        saveAlarmsToStorage();
+
+        renderMusicLibraryUI();
+        renderSoundSelectOptions();
+        renderAlarmListUI();
+        showToast('🗑️ 선택한 음악 파일을 삭제했습니다');
+      }
+
+      function getSoundNameById(soundId) {
+        const foundCustom = customTracks.find(t => t.id === soundId);
+        if (foundCustom) return '🎵 ' + foundCustom.name;
+        const foundBuiltin = BUILTIN_SOUNDS.find(b => b.id === soundId);
+        return foundBuiltin ? foundBuiltin.name : '🔔 기본 차임벨';
+      }
+
+      function playSoundById(soundId, labelText) {
+        stopAllSounds();
+
+        const displayTitle = labelText
+          ? `🔔 [${labelText}] 알림 울리는 중...`
+          : `${getSoundNameById(soundId)} 재생 중...`;
+        dom.bellPlayingText.textContent = displayTitle;
+        dom.bellPlayingBanner.classList.add('active');
+
+        const customTrack = customTracks.find(t => t.id === soundId);
+        if (customTrack && customTrack.objectUrl) {
+          dom.alarmAudioPlayer.src = customTrack.objectUrl;
+          dom.alarmAudioPlayer.currentTime = 0;
+          const p = dom.alarmAudioPlayer.play();
+          if (p !== undefined) {
+            p.catch(() => playBuiltinSynthesizer('builtin:westminster'));
+          }
+          return;
+        }
+
+        playBuiltinSynthesizer(soundId);
+      }
+
+      function stopAllSounds() {
+        try {
+          dom.alarmAudioPlayer.pause();
+          dom.alarmAudioPlayer.currentTime = 0;
+        } catch (e) {}
+        if (state.synthStopTimer) {
+          clearTimeout(state.synthStopTimer);
+          state.synthStopTimer = null;
+        }
+        dom.bellPlayingBanner.classList.remove('active');
+      }
+
+      dom.alarmAudioPlayer.addEventListener('ended', () => {
+        dom.bellPlayingBanner.classList.remove('active');
+      });
+
+      function playBuiltinSynthesizer(type) {
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (!AudioCtx) return;
+          if (!state.audioContext) state.audioContext = new AudioCtx();
+          if (state.audioContext.state === 'suspended') state.audioContext.resume();
+
+          let notes = [];
+          let waveType = 'sine';
+
+          if (type === 'builtin:chime') {
+            notes = [
+              { freq: 523.25, delay: 0.0, duration: 0.45 },
+              { freq: 659.25, delay: 0.35, duration: 0.45 },
+              { freq: 783.99, delay: 0.70, duration: 0.95 },
+              { freq: 523.25, delay: 1.8, duration: 0.45 },
+              { freq: 659.25, delay: 2.15, duration: 0.45 },
+              { freq: 783.99, delay: 2.50, duration: 1.1 }
+            ];
+          } else if (type === 'builtin:digital') {
+            waveType = 'square';
+            for (let i = 0; i < 8; i++) {
+              notes.push({ freq: 880, delay: i * 0.45, duration: 0.16 });
+              notes.push({ freq: 880, delay: i * 0.45 + 0.2, duration: 0.16 });
+            }
+          } else {
+            // 웨스트민스터 학교 종소리
+            notes = [
+              { freq: 392.00, delay: 0.0, duration: 0.55 },
+              { freq: 523.25, delay: 0.6, duration: 0.55 },
+              { freq: 587.33, delay: 1.2, duration: 0.55 },
+              { freq: 392.00, delay: 1.8, duration: 1.10 },
+              { freq: 392.00, delay: 3.1, duration: 0.55 },
+              { freq: 587.33, delay: 3.7, duration: 0.55 },
+              { freq: 659.25, delay: 4.3, duration: 0.55 },
+              { freq: 523.25, delay: 4.9, duration: 1.30 }
+            ];
+          }
+
+          const now = state.audioContext.currentTime;
+          let maxEnd = 0;
+
+          notes.forEach(n => {
+            const osc = state.audioContext.createOscillator();
+            const gain = state.audioContext.createGain();
+            osc.type = waveType;
+            osc.frequency.setValueAtTime(n.freq, now + n.delay);
+
+            const peakGain = waveType === 'square' ? 0.15 : 0.35;
+            gain.gain.setValueAtTime(0.001, now + n.delay);
+            gain.gain.exponentialRampToValueAtTime(peakGain, now + n.delay + 0.03);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + n.delay + n.duration);
+
+            osc.connect(gain);
+            gain.connect(state.audioContext.destination);
+            osc.start(now + n.delay);
+            osc.stop(now + n.delay + n.duration + 0.04);
+
+            if (n.delay + n.duration > maxEnd) maxEnd = n.delay + n.duration;
+          });
+
+          state.synthStopTimer = setTimeout(() => {
+            dom.bellPlayingBanner.classList.remove('active');
+          }, (maxEnd + 0.2) * 1000);
+        } catch (e) {}
+      }
+
+      function updateEightSegmentDigit(svgEl, char, showDp) {
+        const activeSegs = DIGIT_SEGMENTS[char] || [];
+        const allSegNames = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+
+        allSegNames.forEach(segName => {
+          const poly = svgEl.querySelector('.seg-' + segName);
+          if (!poly) return;
+          if (activeSegs.includes(segName)) {
+            poly.classList.add('on');
+          } else {
+            poly.classList.remove('on');
+          }
+        });
+
+        // 8번째 세그먼트 (DP 도트)
+        const dpEl = svgEl.querySelector('.seg-dp');
+        if (dpEl) {
+          if (showDp) dpEl.classList.add('on');
+          else dpEl.classList.remove('on');
+        }
+      }
+
+      function tickClockAndAlarms() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const date = String(now.getDate()).padStart(2, '0');
+        const dayIndex = now.getDay(); // 0(일) ~ 6(토)
+
+        const hh = String(now.getHours()).padStart(2, '0');
+        const mm = String(now.getMinutes()).padStart(2, '0');
+        const ss = String(now.getSeconds()).padStart(2, '0');
+        const currentHHMM = `${hh}:${mm}`;
+
+        // 상단 날짜 및 요일 LED 업데이트
+        dom.dateFullText.textContent = `${year}. ${month}. ${date} (${DAY_LABELS[dayIndex]}요일)`;
+        const daySpans = dom.clockDayRow.querySelectorAll('.day-led-label');
+        daySpans.forEach(sp => {
+          if (parseInt(sp.getAttribute('data-day'), 10) === dayIndex) {
+            sp.classList.add('today');
+          } else {
+            sp.classList.remove('today');
+          }
+        });
+
+        // 4자리 8세그먼트 HH:MM 렌더링 (마지막 4번째 자리의 8번째 세그먼트 DP는 활성 알림이 있을 때 점등)
+        const hasAnyEnabledAlarm = alarms.some(a => a.enabled);
+        const digitSvgs = dom.segmentClockWrapper.querySelectorAll('.digit-svg');
+        if (digitSvgs.length === 4) {
+          updateEightSegmentDigit(digitSvgs[0], hh[0], false);
+          updateEightSegmentDigit(digitSvgs[1], hh[1], false);
+          updateEightSegmentDigit(digitSvgs[2], mm[0], false);
+          updateEightSegmentDigit(digitSvgs[3], mm[1], hasAnyEnabledAlarm);
+        }
+
+        // 중앙 콜론(:) 깜빡임 효과
+        const blinkOn = now.getMilliseconds() < 550;
+        if (blinkOn) {
+          dom.colonTop.classList.add('on');
+          dom.colonBottom.classList.add('on');
+        } else {
+          dom.colonTop.classList.remove('on');
+          dom.colonBottom.classList.remove('on');
+        }
+
+        dom.secondsBadge.textContent = `${ss} SEC`;
+
+        // 정각(00초~02초 사이)에 오늘 요일과 시각(HH:MM)이 일치하는 활성 알림이 있는지 검사
+        const triggerKey = `${year}-${month}-${date}_${currentHHMM}`;
+        if (state.isActivated && now.getSeconds() <= 2 && state.lastTriggeredKey !== triggerKey) {
+          const matchingAlarms = alarms.filter(a =>
+            a.enabled &&
+            a.time === currentHHMM &&
+            Array.isArray(a.days) &&
+            a.days.includes(dayIndex)
+          );
+
+          if (matchingAlarms.length > 0) {
+            state.lastTriggeredKey = triggerKey;
+            const targetAlarm = matchingAlarms[0];
+            playSoundById(targetAlarm.soundId, `${targetAlarm.time} ${targetAlarm.label}`);
+            showToast(`⏰ [${targetAlarm.time}] ${targetAlarm.label} 알림이 울립니다!`);
+          }
+        }
+
+        updateNextAlarmHint(now);
+      }
+
+      function updateNextAlarmHint(now) {
+        const enabledAlarms = alarms.filter(a => a.enabled && Array.isArray(a.days) && a.days.length > 0);
+        if (enabledAlarms.length === 0) {
+          dom.nextAlarmSummary.textContent = '켜져 있는 알림이 없습니다 (우측 상단 알림 설정에서 추가)';
+          return;
+        }
+
+        let bestDiffMinutes = Infinity;
+        let bestAlarm = null;
+        let bestDayOffset = 0;
+
+        const currentDay = now.getDay();
+        const currentTotalMins = now.getHours() * 60 + now.getMinutes();
+
+        enabledAlarms.forEach(alm => {
+          const parts = alm.time.split(':');
+          const almMins = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+
+          for (let offset = 0; offset <= 7; offset++) {
+            const checkDay = (currentDay + offset) % 7;
+            if (alm.days.includes(checkDay)) {
+              let diff = offset * 1440 + (almMins - currentTotalMins);
+              if (diff <= 0) continue; // 이미 지난 시각은 다음 주 또는 다음 날로 계산
+              if (diff < bestDiffMinutes) {
+                bestDiffMinutes = diff;
+                bestAlarm = alm;
+                bestDayOffset = offset;
+              }
+              break;
+            }
+          }
+        });
+
+        if (bestAlarm) {
+          const targetDayIdx = (currentDay + bestDayOffset) % 7;
+          const dayPrefix = bestDayOffset === 0 ? '오늘' : (bestDayOffset === 1 ? '내일' : `${DAY_LABELS[targetDayIdx]}요일`);
+          const soundShort = getSoundNameById(bestAlarm.soundId).replace(/^\[기본\]\s*/, '');
+          dom.nextAlarmSummary.textContent = `${dayPrefix} ${bestAlarm.time} · ${bestAlarm.label} (${soundShort})`;
+        } else {
+          dom.nextAlarmSummary.textContent = '예정된 알림 없음';
+        }
+      }
+
+      function renderSoundSelectOptions() {
+        const currentVal = dom.newAlarmSoundSelect.value;
+        dom.newAlarmSoundSelect.innerHTML = '';
+
+        if (customTracks.length > 0) {
+          const userGroup = document.createElement('optgroup');
+          userGroup.label = '📂 내가 등록한 음악 파일';
+          customTracks.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `🎵 ${t.name}`;
+            userGroup.appendChild(opt);
+          });
+          dom.newAlarmSoundSelect.appendChild(userGroup);
+        }
+
+        const builtinGroup = document.createElement('optgroup');
+        builtinGroup.label = '🔔 기본 내장 사운드';
+        BUILTIN_SOUNDS.forEach(b => {
+          const opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = b.name;
+          builtinGroup.appendChild(opt);
+        });
+        dom.newAlarmSoundSelect.appendChild(builtinGroup);
+
+        if (currentVal && (customTracks.some(t => t.id === currentVal) || BUILTIN_SOUNDS.some(b => b.id === currentVal))) {
+          dom.newAlarmSoundSelect.value = currentVal;
+        } else if (customTracks.length > 0) {
+          dom.newAlarmSoundSelect.value = customTracks[customTracks.length - 1].id;
+        }
+      }
+
+      function renderMusicLibraryUI() {
+        dom.tabMusicCount.textContent = String(customTracks.length);
+        dom.audioCountText.textContent = customTracks.length > 0
+          ? `내 음악 ${customTracks.length}개 등록됨 (+기본음 3종)`
+          : '보관함 음악: 기본음 3종 (터치하여 MP3 추가)';
+
+        dom.userTrackListContainer.innerHTML = '';
+        if (customTracks.length === 0) {
+          const emptyEl = document.createElement('div');
+          emptyEl.style.cssText = 'font-size:0.83rem; color:rgba(255,255,255,0.45); text-align:center; padding:14px 0;';
+          emptyEl.textContent = '아직 추가한 음악 파일이 없습니다. 위 버튼을 눌러 여러 개의 음원을 넣어보세요.';
+          dom.userTrackListContainer.appendChild(emptyEl);
+          return;
+        }
+
+        customTracks.forEach(track => {
+          const row = document.createElement('div');
+          row.className = 'track-item';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'track-name';
+          nameSpan.textContent = `🎵 ${track.name}`;
+
+          const actions = document.createElement('div');
+          actions.className = 'track-actions';
+
+          const playBtn = document.createElement('button');
+          playBtn.type = 'button';
+          playBtn.className = 'secondary-btn';
+          playBtn.textContent = '▶ 듣기';
+          playBtn.addEventListener('click', () => playSoundById(track.id, track.name));
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'danger-btn';
+          delBtn.textContent = '삭제';
+          delBtn.addEventListener('click', () => removeCustomTrack(track.id));
+
+          actions.appendChild(playBtn);
+          actions.appendChild(delBtn);
+          row.appendChild(nameSpan);
+          row.appendChild(actions);
+          dom.userTrackListContainer.appendChild(row);
+        });
+      }
+
+      function renderAlarmListUI() {
+        alarms.sort((a, b) => a.time.localeCompare(b.time));
+        dom.alarmTotalCount.textContent = String(alarms.length);
+        dom.alarmListContainer.innerHTML = '';
+
+        if (alarms.length === 0) {
+          const empty = document.createElement('div');
+          empty.style.cssText = 'text-align:center; padding:20px 0; color:rgba(255,255,255,0.45); font-size:0.86rem;';
+          empty.textContent = '등록된 알림이 없습니다. 위에서 시간과 요일, 음악을 선택해 추가해 보세요.';
+          dom.alarmListContainer.appendChild(empty);
+        }
+
+        alarms.forEach(alm => {
+          const card = document.createElement('div');
+          card.className = 'alarm-item' + (alm.enabled ? '' : ' disabled');
+
+          const topRow = document.createElement('div');
+          topRow.className = 'alarm-item-top';
+
+          const leftInfo = document.createElement('div');
+          leftInfo.style.cssText = 'display:flex; align-items:baseline; flex-wrap:wrap; gap:4px;';
+
+          const timeSpan = document.createElement('span');
+          timeSpan.className = 'alarm-time-badge';
+          timeSpan.textContent = alm.time;
+
+          const labelSpan = document.createElement('span');
+          labelSpan.className = 'alarm-label-text';
+          labelSpan.textContent = alm.label || '알림';
+
+          leftInfo.appendChild(timeSpan);
+          leftInfo.appendChild(labelSpan);
+
+          // ON/OFF 토글 스위치
+          const toggleLabel = document.createElement('label');
+          toggleLabel.className = 'toggle-switch';
+          const toggleInput = document.createElement('input');
+          toggleInput.type = 'checkbox';
+          toggleInput.checked = Boolean(alm.enabled);
+          toggleInput.addEventListener('change', () => {
+            alm.enabled = toggleInput.checked;
+            saveAlarmsToStorage();
+            renderAlarmListUI();
+            renderTodayPreviewChips();
+          });
+          const sliderSpan = document.createElement('span');
+          sliderSpan.className = 'toggle-slider';
+          toggleLabel.appendChild(toggleInput);
+          toggleLabel.appendChild(sliderSpan);
+
+          topRow.appendChild(leftInfo);
+          topRow.appendChild(toggleLabel);
+
+          // 요일 및 음악 종류 변경 드롭다운
+          const metaRow = document.createElement('div');
+          metaRow.className = 'alarm-item-meta';
+
+          const daysText = alm.days && alm.days.length > 0
+            ? alm.days.map(d => DAY_LABELS[d]).join('·')
+            : '요일 미선택';
+
+          const daySpan = document.createElement('span');
+          daySpan.textContent = `📅 매주 [${daysText}]`;
+
+          const bottomControls = document.createElement('div');
+          bottomControls.style.cssText = 'display:flex; align-items:center; gap:6px; width:100%; justify-content:space-between; margin-top:4px;';
+
+          // 알림별 음악 즉시 변경 셀렉트 박스
+          const soundSelect = document.createElement('select');
+          soundSelect.className = 'form-select';
+          soundSelect.style.cssText = 'height:34px; font-size:0.78rem; flex:1; padding:0 8px;';
+
+          customTracks.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `🎵 ${t.name}`;
+            soundSelect.appendChild(opt);
+          });
+          BUILTIN_SOUNDS.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name;
+            soundSelect.appendChild(opt);
+          });
+          soundSelect.value = alm.soundId;
+          soundSelect.addEventListener('change', () => {
+            alm.soundId = soundSelect.value;
+            saveAlarmsToStorage();
+            showToast(`🎵 [${alm.time}] 알림 음악이 변경되었습니다`);
+          });
+
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'danger-btn';
+          delBtn.textContent = '삭제';
+          delBtn.addEventListener('click', () => {
+            alarms = alarms.filter(item => item.id !== alm.id);
+            saveAlarmsToStorage();
+            renderAlarmListUI();
+            renderTodayPreviewChips();
+            showToast('🗑️ 알림이 삭제되었습니다');
+          });
+
+          metaRow.appendChild(daySpan);
+          bottomControls.appendChild(soundSelect);
+          bottomControls.appendChild(delBtn);
+
+          card.appendChild(topRow);
+          card.appendChild(metaRow);
+          card.appendChild(bottomControls);
+          dom.alarmListContainer.appendChild(card);
+        });
+
+        renderTodayPreviewChips();
+      }
+
+      function renderTodayPreviewChips() {
+        const todayIdx = new Date().getDay();
+        const todayAlarms = alarms.filter(a => a.enabled && Array.isArray(a.days) && a.days.includes(todayIdx));
+
+        dom.todayAlarmsPreview.innerHTML = '';
+        if (todayAlarms.length === 0) {
+          const span = document.createElement('span');
+          span.style.fontSize = '0.82rem';
+          span.textContent = `오늘(${DAY_LABELS[todayIdx]}요일) 예정된 알림이 없습니다`;
+          dom.todayAlarmsPreview.appendChild(span);
+          return;
+        }
+
+        todayAlarms.forEach(alm => {
+          const chip = document.createElement('div');
+          chip.className = 'alarm-mini-chip active';
+          chip.textContent = `⏰ ${alm.time} ${alm.label}`;
+          chip.title = `음악: ${getSoundNameById(alm.soundId)}`;
+          chip.addEventListener('click', () => openDrawerWithTab('alarms'));
+          dom.todayAlarmsPreview.appendChild(chip);
+        });
+      }
+
+      function handleAddAlarm() {
+        const hh = dom.newAlarmHour.value;
+        const mm = dom.newAlarmMinute.value;
+        const timeStr = `${hh}:${mm}`;
+
+        const checkedBoxes = dom.newAlarmDaysGrid.querySelectorAll('.day-checkbox-input:checked');
+        const selectedDays = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+
+        if (selectedDays.length === 0) {
+          showToast('⚠️ 최소 1개 이상의 요일을 선택해 주세요');
+          return;
+        }
+
+        const soundId = dom.newAlarmSoundSelect.value || 'builtin:westminster';
+        const label = (dom.newAlarmLabel.value || '').trim() || '타종 알림';
+
+        alarms.push({
+          id: 'alm_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          time: timeStr,
+          days: selectedDays,
+          soundId: soundId,
+          label: label,
+          enabled: true
+        });
+
+        saveAlarmsToStorage();
+        renderAlarmListUI();
+        showToast(`✅ [${timeStr}] 새 알림이 등록되었습니다`);
+      }
+
+      function generateWeekendSchoolPreset() {
+        const defaultSound = customTracks.length > 0 ? customTracks[0].id : 'builtin:westminster';
+        const breakSound = customTracks.length > 1 ? customTracks[1].id : (customTracks.length === 1 ? customTracks[0].id : 'builtin:chime');
+
+        const presetHours = [9, 10, 11, 13, 14, 15, 16, 17, 19, 20, 21];
+        presetHours.forEach((h, idx) => {
+          const hh = String(h).padStart(2, '0');
+          alarms.push({
+            id: 'preset_s_' + h + '_' + Date.now() + idx,
+            time: `${hh}:00`,
+            days: [5, 6, 0],
+            soundId: defaultSound,
+            label: `${idx + 1}교시 공부 시작 (50분)`,
+            enabled: true
+          });
+          alarms.push({
+            id: 'preset_b_' + h + '_' + Date.now() + idx,
+            time: `${hh}:50`,
+            days: [5, 6, 0],
+            soundId: breakSound,
+            label: `${idx + 1}교시 종료 · 10분 휴식`,
+            enabled: true
+          });
+        });
+
+        saveAlarmsToStorage();
+        renderAlarmListUI();
+        showToast('⚡ 금·토·일 50분 공부 / 10분 휴식 타종 시간표가 추가되었습니다!');
+      }
+
+      async function requestScreenWakeLock() {
+        if (!('wakeLock' in navigator)) {
+          dom.wakeLockDot.className = 'dot warn-amber';
+          dom.wakeLockText.textContent = '화면 유지 미지원 브라우저';
+          return;
+        }
+        try {
+          state.wakeLockSentinel = await navigator.wakeLock.request('screen');
+          dom.wakeLockDot.className = 'dot active-green';
+          dom.wakeLockText.textContent = '화면 상시 켜짐 유지 중';
+        } catch (err) {
+          dom.wakeLockDot.className = 'dot warn-amber';
+          dom.wakeLockText.textContent = '화면 켜짐 대기 중';
+        }
+      }
+
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && state.isActivated) {
+          requestScreenWakeLock();
+        }
+      });
+
+      function openDrawerWithTab(tabName) {
+        dom.drawerBackdrop.classList.add('open');
+        dom.settingsDrawer.classList.add('open');
+        if (tabName === 'music') {
+          dom.tabBtnMusic.classList.add('active');
+          dom.tabBtnAlarms.classList.remove('active');
+          dom.tabPanelMusic.classList.add('active');
+          dom.tabPanelAlarms.classList.remove('active');
+        } else {
+          dom.tabBtnAlarms.classList.add('active');
+          dom.tabBtnMusic.classList.remove('active');
+          dom.tabPanelAlarms.classList.add('active');
+          dom.tabPanelMusic.classList.remove('active');
+        }
+      }
+
+      function closeDrawer() {
+        dom.drawerBackdrop.classList.remove('open');
+        dom.settingsDrawer.classList.remove('open');
+      }
+
+      let toastTimer = null;
+      function showToast(msg) {
+        dom.toastBanner.textContent = msg;
+        dom.toastBanner.classList.add('show');
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => dom.toastBanner.classList.remove('show'), 2800);
+      }
+
+      function populateHourMinuteSelects() {
+        for (let h = 0; h < 24; h++) {
+          const opt = document.createElement('option');
+          opt.value = String(h).padStart(2, '0');
+          opt.textContent = `${String(h).padStart(2, '0')}시`;
+          if (h === 9) opt.selected = true;
+          dom.newAlarmHour.appendChild(opt);
+        }
+        for (let m = 0; m < 60; m++) {
+          const opt = document.createElement('option');
+          opt.value = String(m).padStart(2, '0');
+          opt.textContent = `${String(m).padStart(2, '0')}분`;
+          if (m === 0) opt.selected = true;
+          dom.newAlarmMinute.appendChild(opt);
+        }
+      }
+
+      function activateSystem() {
+        if (state.isActivated) return;
+        state.isActivated = true;
+        dom.activationOverlay.classList.add('hidden');
+
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx && !state.audioContext) state.audioContext = new AudioCtx();
+          if (state.audioContext && state.audioContext.state === 'suspended') state.audioContext.resume();
+
+          dom.alarmAudioPlayer.muted = true;
+          const p = dom.alarmAudioPlayer.play();
+          if (p !== undefined) {
+            p.then(() => {
+              dom.alarmAudioPlayer.pause();
+              dom.alarmAudioPlayer.currentTime = 0;
+              dom.alarmAudioPlayer.muted = false;
+            }).catch(() => {
+              dom.alarmAudioPlayer.muted = false;
+            });
+          } else {
+            dom.alarmAudioPlayer.muted = false;
+          }
+        } catch (e) {}
+
+        requestScreenWakeLock();
+        showToast('🔴 8세그먼트 시계 및 자동 알림 시스템이 가동되었습니다');
+      }
+
+      function bindEvents() {
+        dom.activationOverlay.addEventListener('click', activateSystem);
+        dom.activationOverlay.addEventListener('touchend', (e) => {
+          e.preventDefault();
+          activateSystem();
+        });
+
+        dom.openAlarmTabBtn.addEventListener('click', () => openDrawerWithTab('alarms'));
+        dom.openMusicTabBtn.addEventListener('click', () => openDrawerWithTab('music'));
+        dom.audioCountPill.addEventListener('click', () => openDrawerWithTab('music'));
+        dom.closeSettingsBtn.addEventListener('click', closeDrawer);
+        dom.drawerBackdrop.addEventListener('click', closeDrawer);
+
+        dom.tabBtnAlarms.addEventListener('click', () => openDrawerWithTab('alarms'));
+        dom.tabBtnMusic.addEventListener('click', () => openDrawerWithTab('music'));
+
+        dom.multiAudioFileInput.addEventListener('change', handleMultiAudioUpload);
+        dom.addAlarmBtn.addEventListener('click', handleAddAlarm);
+        dom.presetSchoolScheduleBtn.addEventListener('click', generateWeekendSchoolPreset);
+
+        dom.previewSelectedSoundBtn.addEventListener('click', () => {
+          playSoundById(dom.newAlarmSoundSelect.value, '선택한 음악 미리듣기');
+        });
+
+        dom.testCurrentSoundBtn.addEventListener('click', () => {
+          const firstSound = customTracks.length > 0 ? customTracks[0].id : 'builtin:westminster';
+          playSoundById(firstSound, '종소리 테스트');
+        });
+
+        dom.stopBellQuickBtn.addEventListener('click', stopAllSounds);
+
+        document.querySelectorAll('.builtin-preview-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const soundId = btn.getAttribute('data-sound');
+            playSoundById(soundId, '기본 내장 사운드');
+          });
+        });
+      }
+
+      async function init() {
+        populateHourMinuteSelects();
+        await loadTracksFromIndexedDB();
+        renderMusicLibraryUI();
+        renderSoundSelectOptions();
+        renderAlarmListUI();
+        bindEvents();
+        tickClockAndAlarms();
+        setInterval(tickClockAndAlarms, 250);
+      }
+
+      window.onload = init;
+    })();
+  </script>
+</body>
+</html>
